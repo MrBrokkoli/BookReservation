@@ -1,0 +1,9 @@
+*.suo
+*.user
+bin
+obj
+deploy
+.git
+.vs
+.idea
+.vscode
