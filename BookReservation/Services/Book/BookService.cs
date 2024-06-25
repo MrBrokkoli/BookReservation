@@ -33,15 +33,13 @@ namespace BookReservation.Services
 
             var savedModel = await _bookRepository.SaveAsync(model);
 
-            var viewModel = new BookViewModel()
+            return new BookViewModel()
             {
                 Id = savedModel.Id,
                 Author = savedModel.Author,
                 Title = savedModel.Title,
                 IsDeleted = savedModel.IsDeleted,
             };
-
-            return viewModel;
         }
 
         public async Task DeleteAsync(int id)
@@ -59,15 +57,13 @@ namespace BookReservation.Services
             if (model == null)
                 throw new BadRequestServiceException($"Not found book Id={id}");
 
-            var viewModel = new BookViewModel()
+            return new BookViewModel()
             {
                 Id = model.Id,
                 Author = model.Author,
                 Title = model.Title,
                 IsDeleted = model.IsDeleted,
             };
-
-            return viewModel;
         }
 
         public async Task<BookViewModel> UpdateAsync(BookEditModel editModel)
@@ -81,15 +77,13 @@ namespace BookReservation.Services
 
             await _bookRepository.UpdateAsync(model);
 
-            var viewModel = new BookViewModel()
+            return new BookViewModel()
             {
                 Id = model.Id,
                 Author = model.Author,
                 Title = model.Title,
                 IsDeleted = model.IsDeleted,
             };
-
-            return viewModel;
         }
 
         public async Task ReserveAsync(ReserveModel reserveModel)
@@ -99,19 +93,15 @@ namespace BookReservation.Services
                 throw new BadRequestServiceException($"Not found book Id={reserveModel.BookId}");
             if (book.IsDeleted)
                 throw new BadRequestServiceException($"Book was delete");
-            var model = await _reservationRepository.Query.FirstOrDefaultAsync(x => x.BookId == reserveModel.BookId && x.StartDate.HasValue && !x.EndDate.HasValue);
+            var isExists = await _reservationRepository.Query.AnyAsync(x => x.BookId == reserveModel.BookId && x.StartDate.HasValue && !x.EndDate.HasValue);
 
-            if (model == null)
-            {
-                model = new Reservation();
-                model.BookId = reserveModel.BookId;
-                model.Comment = reserveModel.Comment;
-                model.StartDate = DateTime.UtcNow;
-            }
-            else
-            {
+            if (isExists)
                 throw new BadRequestServiceException($"The book on reserve");
-            }
+
+            var model = new Reservation();
+            model.BookId = reserveModel.BookId;
+            model.Comment = reserveModel.Comment;
+            model.StartDate = DateTime.UtcNow;
 
             await _reservationRepository.SaveAsync(model);
         }
@@ -123,15 +113,11 @@ namespace BookReservation.Services
                 throw new BadRequestServiceException($"Not found book Id={bookId}");
             var model = await _reservationRepository.Query.FirstOrDefaultAsync(x => x.BookId == bookId && x.StartDate.HasValue && !x.EndDate.HasValue);
 
-            if (model != null)
-            {
-                model.EndDate = DateTime.UtcNow;
-            }
-            else 
-            {
+            if (model == null)
                 throw new BadRequestServiceException($"The book is not in reserve");
-            }
 
+            model.EndDate = DateTime.UtcNow;
+            
             await _reservationRepository.UpdateAsync(model);
         }
 
@@ -139,39 +125,25 @@ namespace BookReservation.Services
         {
             var reservations = await _reservationRepository.UntrackedQuery.Include(x => x.Book).Where(x => x.StartDate.HasValue && !x.EndDate.HasValue).ToListAsync();
 
-            var viewModel = new List<ReservationBookViewModel>();
-
-            foreach (var reservation in reservations)
+            return reservations.Select(reservation => new ReservationBookViewModel
             {
-                viewModel.Add(new ReservationBookViewModel
-                {
-                    Id = reservation.Book?.Id ?? -1,
-                    Title = reservation.Book?.Title ?? "",
-                    Author = reservation.Book?.Author,
-                    Comment = reservation.Comment,
-                });
-            }
-
-            return viewModel;
+                Id = reservation.Book?.Id ?? -1,
+                Title = reservation.Book?.Title ?? "",
+                Author = reservation.Book?.Author,
+                Comment = reservation.Comment,
+            }).ToList();
         }
 
         public async Task<List<AvailableBookViewModel>> GetAvailableBooksAsync()
         {
             var books = await _bookRepository.UntrackedQuery.Include(x => x.Reservations).Where(x => x.Reservations.Count(r => r.StartDate.HasValue && !r.EndDate.HasValue) == 0 && x.IsDeleted == false).ToListAsync();
 
-            var viewModel = new List<AvailableBookViewModel>();
-
-            foreach (var book in books)
+            return books.Select(book => new AvailableBookViewModel
             {
-                viewModel.Add(new AvailableBookViewModel
-                {
-                    Id = book.Id,
-                    Title = book.Title,
-                    Author = book.Author,
-                });
-            }
-
-            return viewModel;
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+            }).ToList();
         }
     }
 }
